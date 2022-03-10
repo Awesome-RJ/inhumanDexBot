@@ -33,25 +33,27 @@ def add_fc(app, message, texts):
         app.send_message(cid, text, parse_mode='HTML')
         return True
 
-    fc = re.search('(SW(-|\s)*)*([0-9]{4}(-|\s)*){2}[0-9]{4}', message.text)
-
-    if not fc:
-        text = texts["fc_error"]
-        app.send_message(cid, text, parse_mode='HTML')
-        return None
-
-    else:
+    if fc := re.search(
+        '(SW(-|\s)*)*([0-9]{4}(-|\s)*){2}[0-9]{4}', message.text
+    ):
         fc = re.sub('(SW)|\s|-', '', fc[0])
         blocks = re.findall('[0-9]{4}', fc)
         fc = '-'.join(blocks)
         data[uid] = {'fc': fc, 'user': user}
-        if uid in data:
-            text = texts['fc_update'].format(user, fc)
-        else:
-            text = texts['fc_add'].format(user, fc)
+        text = (
+            texts['fc_update'].format(user, fc)
+            if uid in data
+            else texts['fc_add'].format(user, fc)
+        )
+
         app.send_message(cid, text, parse_mode='HTML')
         with open('src/friendcodes.json', 'w') as filee:
             json.dump(data, filee, indent=4)
+
+    else:
+        text = texts["fc_error"]
+        app.send_message(cid, text, parse_mode='HTML')
+        return None
 
 
 def show_my_fc(app, message, texts):
@@ -60,11 +62,7 @@ def show_my_fc(app, message, texts):
     cid = str(message.chat.id)
     uid = str(message.from_user.id)
 
-    if uid in data:
-        text = data[uid]['fc']
-    else:
-        text = texts['no_fc']
-
+    text = data[uid]['fc'] if uid in data else texts['no_fc']
     app.send_message(cid, text, parse_mode='HTML')
 
 
@@ -86,10 +84,7 @@ def new_raid(app, message, texts):
         return True
 
     raid.pokemon = re.sub('\/newraid(@inhumanDexBot)*\s', '', message.text)
-    if uid in data:
-        raid.fc = data[uid]['fc']
-    else:
-        raid.fc = '-'
+    raid.fc = data[uid]['fc'] if uid in data else '-'
     raid.idd = uid
     raid.owner = user
     raid.players = []
@@ -97,29 +92,31 @@ def new_raid(app, message, texts):
         raid.pokemon,
         raid.owner,
         raid.fc,
-        raid.players[0] if len(raid.players) > 0 else '-',
+        raid.players[0] if raid.players else '-',
         raid.players[1] if len(raid.players) > 1 else '-',
         raid.players[2] if len(raid.players) > 2 else '-',
     )
+
 
     markup_list = [[]]
     for i in range(1, 6):
         markup_list[-1].append(
             InlineKeyboardButton(
-                text=str(i)+'⭐️',
-                callback_data=str(raid.idd)+'stars'+str(i)
+                text=f'{str(i)}⭐️', callback_data=f'{raid.idd}stars{str(i)}'
             )
         )
-    markup_list.append([
-        InlineKeyboardButton(
-            text='🙋‍♂️ Join',
-            callback_data='join'+str(raid.idd)
-        ),
-        InlineKeyboardButton(
-            text='🚫 Close',
-            callback_data='done'+str(raid.idd)
-        )
-    ])
+
+    markup_list.append(
+        [
+            InlineKeyboardButton(
+                text='🙋‍♂️ Join', callback_data=f'join{raid.idd}'
+            ),
+            InlineKeyboardButton(
+                text='🚫 Close', callback_data=f'done{raid.idd}'
+            ),
+        ]
+    )
+
     markup = InlineKeyboardMarkup(markup_list)
 
     app.send_message(cid, text, parse_mode='HTML', reply_markup=markup)
@@ -141,7 +138,7 @@ def stars(app, call, texts):
     raid.stars = '⭐️' * int(call.data[-1])
 
     text = texts['new_raid'].format(
-        raid.pokemon + ' ' + raid.stars,
+        f'{raid.pokemon} {raid.stars}',
         raid.owner,
         raid.fc,
         raid.players[0] if len(raid.players) > 0 else '-',
@@ -149,16 +146,20 @@ def stars(app, call, texts):
         raid.players[2] if len(raid.players) > 2 else '-',
     )
 
-    markup = InlineKeyboardMarkup([[
-        InlineKeyboardButton(
-            text='🙋‍♂️ Join',
-            callback_data='join'+str(raid.idd)
-        ),
-        InlineKeyboardButton(
-            text='🚫 Close',
-            callback_data='done'+str(raid.idd)
-        )
-    ]])
+
+    markup = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    text='🙋‍♂️ Join', callback_data=f'join{str(raid.idd)}'
+                ),
+                InlineKeyboardButton(
+                    text='🚫 Close', callback_data=f'done{str(raid.idd)}'
+                ),
+            ]
+        ]
+    )
+
 
     app.edit_message_text(
         chat_id=cid,
@@ -177,7 +178,7 @@ def join(app, call, texts):
     user = call.from_user.first_name
     owner_uid = re.findall('[0-9]+', call.data)[0]
     raid = user_dict[owner_uid]
-        
+
     if uid == raid.idd:
         return None
 
@@ -194,7 +195,7 @@ def join(app, call, texts):
         raid.players_id.remove(uid)
 
     text = texts['new_raid'].format(
-        raid.pokemon + ' ' + raid.stars if raid.stars else raid.pokemon,
+        f'{raid.pokemon} {raid.stars}' if raid.stars else raid.pokemon,
         raid.owner,
         raid.fc,
         raid.players[0] if len(raid.players) > 0 else '-',
@@ -202,26 +203,29 @@ def join(app, call, texts):
         raid.players[2] if len(raid.players) > 2 else '-',
     )
 
+
     markup_list = []
-    if raid.stars == None:
+    if raid.stars is None:
         markup_list.append([])
         for i in range(1, 6):
             markup_list[-1].append(
                 InlineKeyboardButton(
-                    text=str(i)+'⭐️',
-                    callback_data=str(raid.idd)+'stars'+str(i)
+                    text=f'{str(i)}⭐️',
+                    callback_data=f'{str(raid.idd)}stars{str(i)}',
                 )
             )
-    markup_list.append([
-        InlineKeyboardButton(
-            text='🙋‍♂️ Join',
-            callback_data='join'+str(raid.idd)
-        ),
-        InlineKeyboardButton(
-            text='🚫 Close',
-            callback_data='done'+str(raid.idd)
-        )
-    ])
+
+    markup_list.append(
+        [
+            InlineKeyboardButton(
+                text='🙋‍♂️ Join', callback_data=f'join{str(raid.idd)}'
+            ),
+            InlineKeyboardButton(
+                text='🚫 Close', callback_data=f'done{str(raid.idd)}'
+            ),
+        ]
+    )
+
     markup = InlineKeyboardMarkup(markup_list)
 
     app.edit_message_text(
@@ -246,15 +250,19 @@ def done(app, call, texts):
         app.answer_callback_query(call.id, texts['not_creator'], True)
         return None
 
-    markup = InlineKeyboardMarkup([[
-        InlineKeyboardButton(
-            text='✅ Confirm',
-            callback_data='yes'+str(raid.idd)
-        ),
-        InlineKeyboardButton(
-            text='◀️ Back',
-            callback_data='no'+str(raid.idd))
-    ]])
+    markup = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    text='✅ Confirm', callback_data=f'yes{str(raid.idd)}'
+                ),
+                InlineKeyboardButton(
+                    text='◀️ Back', callback_data=f'no{str(raid.idd)}'
+                ),
+            ]
+        ]
+    )
+
 
     app.edit_message_reply_markup(
         chat_id=cid,
@@ -274,9 +282,9 @@ def confirm(app, call, texts):
     if uid != raid.idd:
         app.answer_callback_query(call.id, texts['not_creator'], True)
         return None
-        
+
     text = texts['new_raid'].format(
-        raid.pokemon + ' ' + raid.stars if raid.stars else raid.pokemon,
+        f'{raid.pokemon} {raid.stars}' if raid.stars else raid.pokemon,
         raid.owner,
         raid.fc,
         raid.players[0] if len(raid.players) > 0 else '-',
@@ -284,19 +292,22 @@ def confirm(app, call, texts):
         raid.players[2] if len(raid.players) > 2 else '-',
     )
 
+
     text += texts['raid_closed']
 
-    pin = ''
-    for i in range(4):
-        pin += random.choice('0123456789')
+    pin = ''.join(random.choice('0123456789') for _ in range(4))
     raid.pin = pin
 
-    markup = InlineKeyboardMarkup([[
-        InlineKeyboardButton(
-            text='Pin',
-            callback_data='pin'+str(raid.idd)
-        )
-    ]])
+    markup = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    text='Pin', callback_data=f'pin{str(raid.idd)}'
+                )
+            ]
+        ]
+    )
+
 
     app.edit_message_text(
         chat_id=cid,
@@ -314,13 +325,13 @@ def back(app, call, texts):
     mid = call.message.message_id
     owner_uid = re.findall('[0-9]+', call.data)[0]
     raid = user_dict[owner_uid]
-        
+
     if uid != raid.idd:
         app.answer_callback_query(call.id, texts['not_creator'], True)
         return None
 
     text = texts['new_raid'].format(
-        raid.pokemon + ' ' + raid.stars if raid.stars else raid.pokemon,
+        f'{raid.pokemon} {raid.stars}' if raid.stars else raid.pokemon,
         raid.owner,
         raid.fc,
         raid.players[0] if len(raid.players) > 0 else '-',
@@ -328,26 +339,29 @@ def back(app, call, texts):
         raid.players[2] if len(raid.players) > 2 else '-',
     )
 
+
     markup_list = []
-    if raid.stars == None:
+    if raid.stars is None:
         markup_list.append([])
         for i in range(1, 6):
             markup_list[-1].append(
                 InlineKeyboardButton(
-                    text=str(i)+'⭐️',
-                    callback_data=str(raid.idd)+'stars'+str(i)
+                    text=f'{str(i)}⭐️',
+                    callback_data=f'{str(raid.idd)}stars{str(i)}',
                 )
             )
-    markup_list.append([
-        InlineKeyboardButton(
-            text='🙋‍♂️ Join',
-            callback_data='join'+str(raid.idd)
-        ),
-        InlineKeyboardButton(
-            text='🚫 Close',
-            callback_data='done'+str(raid.idd)
-        )
-    ])
+
+    markup_list.append(
+        [
+            InlineKeyboardButton(
+                text='🙋‍♂️ Join', callback_data=f'join{str(raid.idd)}'
+            ),
+            InlineKeyboardButton(
+                text='🚫 Close', callback_data=f'done{str(raid.idd)}'
+            ),
+        ]
+    )
+
     markup = InlineKeyboardMarkup(markup_list)
 
     app.edit_message_text(

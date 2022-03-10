@@ -36,7 +36,7 @@ def get_bot_data(app, message):
         stats['users'][cid] = {}
         name = message.chat.first_name
         try:
-            name = message.chat.first_name + ' ' + message.chat.last_name
+            name = f'{message.chat.first_name} {message.chat.last_name}'
         except TypeError:
             name = message.chat.first_name
         stats['users'][cid]['name'] = name
@@ -63,9 +63,7 @@ def get_bot_data(app, message):
 @app.on_message(Filters.command(['stats', 'stats@inhumanDexBot']))
 def get_stats(app, message):
     if message.from_user.id in Config.sudo:
-        members = 0
-        for group in stats['groups']:
-            members += stats['groups'][group]['members']
+        members = sum(stats['groups'][group]['members'] for group in stats['groups'])
         text = texts['stats'].format(
             len(stats['users']),
             len(stats['groups']),
@@ -317,7 +315,7 @@ def poketypes_back(client: app, callback_query: CallbackQuery):
 @app.on_message(Filters.command(['data', 'data@inhumanDexBot']))
 def pkmn_search(app, message):
     try:
-        if message.text == '/data' or message.text == '/data@inhumanDexBot':
+        if message.text in ['/data', '/data@inhumanDexBot']:
             app.send_message(message.chat.id, texts['error1'], parse_mode='HTML')
             return None
         pkmn = func.find_name(message.text)
@@ -341,33 +339,36 @@ def pkmn_search(app, message):
         text = func.set_message(data[pkmn][form], reduced=True)
     else:
         base_form = re.sub('_', ' ', pkmn.title())
-        name = base_form + ' (' + data[pkmn][form]['name'] + ')'
+        name = f'{base_form} (' + data[pkmn][form]['name'] + ')'
         text = func.set_message(data[pkmn][form], name, reduced=True)
 
-    markup_list = [[
-        InlineKeyboardButton(
-            text='➕ Expand',
-            callback_data='all_infos/'+pkmn+'/'+form
-        )
-    ],
-    [
-        InlineKeyboardButton(
-            text='⚔️ Moveset',
-            callback_data='moveset/'+pkmn+'/'+form
-        ),
-        InlineKeyboardButton(
-            text='🏠 Locations',
-            callback_data='locations/'+pkmn+'/'+form
-        )
-    ]]
+    markup_list = [
+        [
+            InlineKeyboardButton(
+                text='➕ Expand', callback_data=f'all_infos/{pkmn}/{form}'
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text='⚔️ Moveset', callback_data=f'moveset/{pkmn}/{form}'
+            ),
+            InlineKeyboardButton(
+                text='🏠 Locations', callback_data=f'locations/{pkmn}/{form}'
+            ),
+        ],
+    ]
+
     for alt_form in data[pkmn]:
         if alt_form != form:
-            markup_list.append([
-                InlineKeyboardButton(
-                    text=data[pkmn][alt_form]['name'],
-                    callback_data='basic_infos/'+pkmn+'/'+alt_form
-                )
-            ])
+            markup_list.append(
+                [
+                    InlineKeyboardButton(
+                        text=data[pkmn][alt_form]['name'],
+                        callback_data=f'basic_infos/{pkmn}/{alt_form}',
+                    )
+                ]
+            )
+
     markup = InlineKeyboardMarkup(markup_list)
 
     func.bot_action(app, message, text, markup)
@@ -376,8 +377,7 @@ def pkmn_search(app, message):
 def best_matches(app, message, result):
     text = texts['results']
     emoji_list = ['1️⃣', '2️⃣', '3️⃣']
-    index = 0
-    for dictt in result:
+    for index, dictt in enumerate(result):
         pkmn = dictt['pkmn']
         form = dictt['form']
         percentage = dictt['percentage']
@@ -390,7 +390,6 @@ def best_matches(app, message, result):
         )
         if index == 0:
             text += ' [<b>⭐️ Top result</b>]'
-        index += 1
     app.send_message(message.chat.id, text, parse_mode='HTML')
 
 
@@ -398,38 +397,41 @@ def best_matches(app, message, result):
 def all_infos(app, call):
     pkmn = re.split('/', call.data)[1]
     form = re.split('/', call.data)[2]
-    
+
     if pkmn in form:
         text = func.set_message(data[pkmn][form], reduced=False)
     else:
         base_form = re.sub('_', ' ', pkmn.title())
-        name = base_form + ' (' + data[pkmn][form]['name'] + ')'
+        name = f'{base_form} (' + data[pkmn][form]['name'] + ')'
         text = func.set_message(data[pkmn][form], name, reduced=False)
 
-    markup_list = [[
-        InlineKeyboardButton(
-            text='➖ Reduce',
-            callback_data='basic_infos/'+pkmn+'/'+form
-        )
-    ],
-    [
-        InlineKeyboardButton(
-            text='⚔️ Moveset',
-            callback_data='moveset/'+pkmn+'/'+form
-        ),
-        InlineKeyboardButton(
-            text='🏠 Locations',
-            callback_data='locations/'+pkmn+'/'+form
-        )
-    ]]
+    markup_list = [
+        [
+            InlineKeyboardButton(
+                text='➖ Reduce', callback_data=f'basic_infos/{pkmn}/{form}'
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text='⚔️ Moveset', callback_data=f'moveset/{pkmn}/{form}'
+            ),
+            InlineKeyboardButton(
+                text='🏠 Locations', callback_data=f'locations/{pkmn}/{form}'
+            ),
+        ],
+    ]
+
     for alt_form in data[pkmn]:
         if alt_form != form:
-            markup_list.append([
-                InlineKeyboardButton(
-                    text=data[pkmn][alt_form]['name'],
-                    callback_data='basic_infos/'+pkmn+'/'+alt_form
-                )
-            ])
+            markup_list.append(
+                [
+                    InlineKeyboardButton(
+                        text=data[pkmn][alt_form]['name'],
+                        callback_data=f'basic_infos/{pkmn}/{alt_form}',
+                    )
+                ]
+            )
+
     markup = InlineKeyboardMarkup(markup_list)
 
     func.bot_action(app, call, text, markup)
@@ -455,18 +457,22 @@ def locations(app, call):
 
     text = func.get_locations(data, pkmn)
 
-    markup = InlineKeyboardMarkup([[
-        InlineKeyboardButton(
-            text='⚔️ Moveset',
-            callback_data='moveset/'+pkmn+'/'+form
-        )
-    ],
-    [
-        InlineKeyboardButton(
-            text='🔙 Back to basic infos',
-            callback_data='basic_infos/'+pkmn+'/'+form
-        )
-    ]])
+    markup = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    text='⚔️ Moveset', callback_data=f'moveset/{pkmn}/{form}'
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text='🔙 Back to basic infos',
+                    callback_data=f'basic_infos/{pkmn}/{form}',
+                )
+            ],
+        ]
+    )
+
 
     func.bot_action(app, call, text, markup)
 
@@ -477,12 +483,12 @@ def locations(app, call):
 def usage(app, message):
     try:
         page = int(re.split('/', message.data)[1])
-        dictt = func.get_usage_vgc(int(page), usage_dict['vgc'])
+        dictt = func.get_usage_vgc(page, usage_dict['vgc'])
     except AttributeError:
         page = 1
         text = '<i>Connecting to Pokémon Showdown database...</i>'
         message = app.send_message(message.chat.id, text, parse_mode='HTML')
-        dictt = func.get_usage_vgc(int(page))
+        dictt = func.get_usage_vgc(page)
         usage_dict['vgc'] = dictt['vgc_usage']
 
     leaderboard = dictt['leaderboard']
